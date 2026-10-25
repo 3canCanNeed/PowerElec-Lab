@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电电实验室 · 电力电子交互仿真（离线版）</title>
+<style>
+:root{--pri:#0f172a;--pri2:#1e3a8a;--acc:#0ea5e9;--ok:#059669;--warn:#dc2626;--bg:#f1f5f9;--card:#fff;--txt:#1e293b;--mut:#64748b;--line:#e2e8f0}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;background:var(--bg);color:var(--txt);line-height:1.6}
+header{background:linear-gradient(135deg,#0f172a,#1e40af);color:#fff;padding:22px 20px 0}
+header h1{font-size:1.35rem}
+header .sub{font-size:.8rem;opacity:.8;margin:4px 0 12px}
+.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin}
+.tabs button{border:none;background:rgba(255,255,255,.12);color:#fff;padding:8px 16px;border-radius:10px 10px 0 0;cursor:pointer;font-size:.85rem;white-space:nowrap}
+.tabs button.act{background:var(--bg);color:var(--pri);font-weight:700}
+main{max-width:1080px;margin:0 auto;padding:18px}
+.mod{display:none}
+.mod.act{display:block}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(15,23,42,.06)}
+.panel h2{font-size:1.05rem;color:var(--pri2);margin-bottom:4px}
+.panel .desc{font-size:.82rem;color:var(--mut);margin-bottom:12px}
+.ctl{display:flex;flex-wrap:wrap;gap:14px 26px;margin-bottom:12px}
+.ctl label{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--txt);min-width:170px;flex:1;max-width:260px}
+.ctl label b{font-size:.78rem;color:var(--mut);font-weight:600}
+.ctl input[type=range]{width:100%;accent-color:var(--acc)}
+.ctl select{padding:4px 8px;border:1px solid var(--line);border-radius:6px;font-size:.82rem}
+.reads{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.read{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:6px 14px;font-size:.82rem}
+.read b{color:var(--pri2);font-size:1.02rem;font-family:Consolas,monospace}
+.read.warn{background:#fef2f2;border-color:#fecaca}.read.warn b{color:var(--warn)}
+.read.ok{background:#ecfdf5;border-color:#a7f3d0}.read.ok b{color:var(--ok)}
+canvas{width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;display:block}
+.fbox{background:#eef5ff;border:1px dashed var(--acc);border-radius:8px;padding:10px 14px;font-size:.85rem;margin-top:10px}
+.fbox b{color:var(--pri2)}
+.legend{display:flex;gap:16px;font-size:.78rem;color:var(--mut);margin:6px 2px}
+.legend i{display:inline-block;width:22px;height:4px;border-radius:2px;vertical-align:middle;margin-right:5px}
+footer{max-width:1080px;margin:0 auto;padding:10px 20px 40px;color:var(--mut);font-size:.72rem}
+</style>
+</head>
+<body>
+<header>
+<h1>⚡ 电电实验室 —— 电力电子交互仿真</h1>
+<div class="sub">纯前端 · 零依赖 · 离线可用 ｜ 拖动滑块，波形即时重算 ｜ 物理公式与王兆安《电力电子技术》(第5版) 一致</div>
+<div class="tabs" id="tabs">
+<button data-m="m1" class="act">① 单相全控桥整流</button>
+<button data-m="m2">② 三相全控桥整流</button>
+<button data-m="m3">③ DC-DC 斩波（Buck/Boost）</button>
+<button data-m="m4">④ SPWM 逆变</button>
+<button data-m="m5">⑤ 转速电流双闭环调速</button>
+</div>
+</header>
+<main>
+
+<!-- ================= 模块1 ================= -->
+<section class="mod act" id="m1">
+<div class="panel">
+<h2>单相全控桥式整流 · 触发角 α 与负载的影响</h2>
+<div class="desc">VT1/VT4 与 VT2/VT3 每半周轮流导通。R 负载电流断续（α&gt;0 时波形缺一块）；大电感负载电流连续，α&gt;90° 后输出平均电压变负（进入有源逆变区，本图 α 限 0~90° 展示连续电流形态）。</div>
+<div class="ctl">
+<label><b>触发角 α = <span id="a1a">30</span>°</b><input type="range" id="a1" min="0" max="90" value="30"></label>
+<label><b>交流电压 U₂ = <span id="u21">220</span> V</b><input type="range" id="u2v" min="50" max="380" value="220"></label>
+<label><b>负载类型</b><select id="ld1"><option value="R">电阻负载 R</option><option value="RL" selected>大电感负载（电流连续）</option></select></label>
+</div>
+<div class="reads">
+<div class="read">输出平均电压 Ud = <b id="r1ud">—</b> V</div>
+<div class="read">输出电压最大值 = <b id="r1um">—</b> V</div>
+<div class="read ok">公式：<span id="r1f">—</span></div>
+</div>
+<canvas id="cv1" height="260"></canvas>
+<div class="legend"><span><i style="background:#94a3b8"></i>电源电压 u₂</span><span><i style="background:#2563eb"></i>输出电压 u_d</span><span><i style="background:#fde68a"></i>导通区</span></div>
+<div class="fbox">大电感连续：Ud = 0.9·U₂·cosα；纯电阻：Ud = 0.45·U₂·(1+cosα)。注意 α 的计量起点是<b>自然换相点（电压过零点）</b>。</div>
+</div>
+</section>
+
+<!-- ================= 模块2 ================= -->
+<section class="mod" id="m2">
+<div class="panel">
+<h2>三相全控桥式整流 · 六脉波波形</h2>
+<div class="desc">每周期 6 次换相，晶闸管成对导通 60°。α 从自然换相点（相线电压交点）起算。大电感电流连续下 α&gt;60° 时输出波形出现负的部分，α→90° 平均值趋零——正是有源逆变的边界。</div>
+<div class="ctl">
+<label><b>触发角 α = <span id="a2a">30</span>°</b><input type="range" id="a2" min="0" max="89" value="30"></label>
+<label><b>相电压 U₂ = <span id="u22">100</span> V</b><input type="range" id="u2v2" min="30" max="220" value="100"></label>
+</div>
+<div class="reads">
+<div class="read">Ud = 2.34·U₂·cosα = <b id="r2ud">—</b> V</div>
+<div class="read">线电压峰值 √6·U₂ = <b id="r2um">—</b> V</div>
+<div class="read" id="r2inv">当前状态：<b id="r2s">整流状态</b></div>
+</div>
+<canvas id="cv2" height="260"></canvas>
+<div class="legend"><span><i style="background:#cbd5e1"></i>α=0 输出包络（六脉波）</span><span><i style="background:#7c3aed"></i>输出电压 u_d</span></div>
+<div class="fbox">每管导通 120°，需<b>双窄脉冲或宽脉冲</b>触发；晶闸管最大正反向电压 = √6·U₂。α=0 时 Ud₀ = 2.34U₂（1.35U₂L）。</div>
+</div>
+</section>
+
+<!-- ================= 模块3 ================= -->
+<section class="mod" id="m3">
+<div class="panel">
+<h2>DC-DC 斩波电路 · Buck / Boost 稳态波形</h2>
+<div class="desc">电感电流连续（CCM）稳态：一个开关周期内的电感电流三角波与开关节点电压。改 D 观察 Uo 与纹波 ΔI_L 变化；ΔI 过大或负载太轻会进入断续（DCM），状态灯提示。</div>
+<div class="ctl">
+<label><b>拓扑</b><select id="topo"><option value="buck" selected>Buck 降压</option><option value="boost">Boost 升压</option></select></label>
+<label><b>占空比 D = <span id="dD">0.6</span></b><input type="range" id="D" min="0.05" max="0.9" step="0.01" value="0.6"></label>
+<label><b>输入 Ui = <span id="uI">24</span> V</b><input type="range" id="Ui" min="5" max="100" value="24"></label>
+<label><b>电感 L = <span id="Lv">100</span> µH</b><input type="range" id="L" min="20" max="500" step="10" value="100"></label>
+<label><b>开关频率 f = <span id="fv">50</span> kHz</b><input type="range" id="f" min="10" max="200" step="5" value="50"></label>
+<label><b>负载电阻 R = <span id="Rv">10</span> Ω</b><input type="range" id="R" min="2" max="50" value="10"></label>
+<label><b>输出电容 C = <span id="Cv">220</span> µF</b><input type="range" id="C" min="20" max="1000" step="20" value="220"></label>
+</div>
+<div class="reads">
+<div class="read">输出电压 Uo = <b id="r3uo">—</b> V</div>
+<div class="read">电感电流纹波 ΔI_L = <b id="r3di">—</b> A</div>
+<div class="read">Buck 输出电压纹波 ΔUo ≈ <b id="r3du">—</b> mV</div>
+<div class="read" id="r3mode">工作模式：<b id="r3m">CCM 连续</b></div>
+</div>
+<canvas id="cv3" height="300"></canvas>
+<div class="legend"><span><i style="background:#dc2626"></i>电感电流 i_L（三角波）</span><span><i style="background:#2563eb"></i>开关节点电压</span></div>
+<div class="fbox">Buck：Uo = D·Ui，ΔI_L = Ui·D(1−D)/(L·f)；Boost：Uo = Ui/(1−D)，ΔI_L = Ui·D/(L·f)。CCM 判据：ΔI_L/2 小于电感平均电流。伏秒平衡是这一切的出发点。</div>
+</div>
+</section>
+
+<!-- ================= 模块4 ================= -->
+<section class="mod" id="m4">
+<div class="panel">
+<h2>SPWM 正弦脉宽调制 · 生成过程</h2>
+<div class="desc">调制波（正弦）与载波（三角）比较产生 PWM 脉冲。上半部：两路波形叠加；下半部：单相全桥双极性输出电压（±Ud）。同步调制取 N = 3 的奇数倍以消除偶次谐波。</div>
+<div class="ctl">
+<label><b>调制比 m = <span id="mv">0.8</span></b><input type="range" id="m" min="0.1" max="1.2" step="0.05" value="0.8"></label>
+<label><b>载波比 N（fc/fr）</b><select id="N"><option>9</option><option selected>15</option><option>21</option><option>33</option><option>51</option></select></label>
+<label><b>直流母线 Ud = <span id="udv">200</span> V</b><input type="range" id="ud" min="50" max="400" step="10" value="200"></label>
+</div>
+<div class="reads">
+<div class="read">输出基波幅值 U₁ₘ = m·Ud/2 = <b id="r4u1">—</b> V</div>
+<div class="read">基波有效值 = <b id="r4u1r">—</b> V</div>
+<div class="read" id="r4mod">调制区：<b id="r4z">线性区</b></div>
+</div>
+<canvas id="cv4" height="330"></canvas>
+<div class="legend"><span><i style="background:#dc2626"></i>调制波（正弦）</span><span><i style="background:#94a3b8"></i>载波（三角）</span><span><i style="background:#2563eb"></i>输出 PWM 电压</span><span><i style="background:#34d399"></i>基波</span></div>
+<div class="fbox">m ≤ 1 线性区：U₁ₘ = m·Ud/2；m &gt; 1 过调制，基波不再线性增长，趋近方波的 4Ud/π ≈ 1.27Ud。谐波集中在载波频率整数倍附近。</div>
+</div>
+</section>
+
+<!-- ================= 模块5 ================= -->
+<section class="mod" id="m5">
+<div class="panel">
+<h2>转速电流双闭环直流调速 · 参数实验台</h2>
+<div class="desc">与课程设计同构的简化实时仿真：ASR(PI) → 电流环(一阶等效) → 直流电机。空载启动至 t = 1.5 s 时<b>突加负载 TL</b>（观察抗扰！）。蓝=转速 n（左轴），红=电枢电流 Ia（右轴）。调小 Kp/τn 看负载跌落如何变大——这正是"典型 II 型系统 + 抗饱和"的直观课。</div>
+<div class="ctl">
+<label><b>转速给定 n* = <span id="nrv">1500</span> r/min</b><input type="range" id="nr" min="500" max="1500" step="50" value="1500"></label>
+<label><b>ASR 比例 Kp = <span id="kpv">773</span></b><input type="range" id="kp" min="50" max="3000" step="1" value="773"></label>
+<label><b>ASR 积分时间 τn = <span id="tnv">36</span> ms</b><input type="range" id="tn" min="5" max="120" value="36"></label>
+<label><b>最大电流 Idm = <span id="idmv">30</span> A</b><input type="range" id="idm" min="10" max="45" value="30"></label>
+<label><b>负载转矩 TL = <span id="tlv">19.1</span> N·m</b><input type="range" id="tl" min="0" max="19.1" step="0.1" value="19.1"></label>
+</div>
+<div class="reads">
+<div class="read">启动电流平顶 ≈ <b id="r5i">—</b> A</div>
+<div class="read">超调量 σ = <b id="r5s">—</b> %</div>
+<div class="read">突加负载跌落 Δn = <b id="r5dip">—</b> r/min</div>
+<div class="read">恢复至±2%用时 = <b id="r5rec">—</b> s</div>
+<div class="read">稳态转速 = <b id="r5n">—</b> r/min</div>
+</div>
+<canvas id="cv5" height="320"></canvas>
+<div class="legend"><span><i style="background:#2563eb"></i>转速 n（左轴）</span><span><i style="background:#dc2626"></i>电枢电流 Ia（右轴）</span><span><i style="background:#f59e0b"></i>t=1.5s 突加负载</span></div>
+<div class="fbox">模型：电流环等效一阶 2TΣi = 2.2 ms；电机 Ce = CT = 1.268，J = 0.135 kg·m²（对应 3 kW/220 V/1500 r/min 机组）；ASR 输出经 β = 0.2 限幅于 Idm，钳位抗饱和（与 Simulink 一致）。Kp=773、τn=36 ms 即课程设计典型 II 型 (h=5) 整定值。稳态段的小幅调节波动是限幅与反馈滤波交互的真实行为（Simulink 实测波动带 ±12 r/min，本模型 ±10 r/min）。深度饱和下的扰动恢复主要由 Idm 决定，参数差异体现在退饱和后的收敛与超调。</div>
+</div>
+</section>
+
+</main>
+<footer>电电实验室 v0.1 · 原型演示 ｜ 全部计算在浏览器本地完成，无网络请求 ｜ 波形与公式对照王兆安《电力电子技术》第5版核验<br>设想仓库：PowerElec-Lab —— 面向中文电力电子教学的交互仿真集合（GitHub Pages 部署，欢迎指正）</footer>
+
+<script>
+"use strict";
+// ---------- 通用 ----------
+const $ = id => document.getElementById(id);
+const DEG = Math.PI / 180;
+function ctxOf(cv){
+  if (!cv._cssH) cv._cssH = +cv.getAttribute("height") || 240; // 首次取 HTML 属性里的 CSS 高度
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || cv.parentElement.clientWidth - 2;
+  const h = cv._cssH;
+  cv.style.height = h + "px";
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, W: w, H: h };
+}
+function axes(ctx, W, H, pad, xl, yl){
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 1;
+  ctx.font = "10px Consolas"; ctx.fillStyle = "#94a3b8";
+  // x 轴刻度由各模块画；这里画外框与 y 轴
+  ctx.strokeRect(pad.l, pad.t, W - pad.l - pad.r, H - pad.t - pad.b);
+  if (xl) { ctx.fillText(xl, W - pad.r - xl.length * 6, H - pad.b + 13); }
+  if (yl) { ctx.fillText(yl, pad.l + 2, pad.t - 3); }
+}
+function plot(ctx, pad, W, H, xmin, xmax, ymin, ymax, xs, ys, color, width, fill){
+  ctx.beginPath();
+  const X = x => pad.l + (x - xmin) / (xmax - xmin) * (W - pad.l - pad.r);
+  const Y = y => H - pad.b - (y - ymin) / (ymax - ymin) * (H - pad.t - pad.b);
+  for (let k = 0; k < xs.length; k++){
+    const px = X(xs[k]), py = Y(Math.max(ymin, Math.min(ymax, ys[k])));
+    if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  if (fill){
+    ctx.lineTo(X(xs[xs.length - 1]), Y(ymin)); ctx.lineTo(X(xs[0]), Y(ymin)); ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.beginPath();
+    for (let k = 0; k < xs.length; k++){
+      const px = X(xs[k]), py = Y(Math.max(ymin, Math.min(ymax, ys[k])));
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+  }
+  ctx.strokeStyle = color; ctx.lineWidth = width || 2; ctx.stroke();
+  return { X, Y };
+}
+// ---------- 标签页 ----------
+document.querySelectorAll("#tabs button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("#tabs button").forEach(b => b.classList.remove("act"));
+    document.querySelectorAll(".mod").forEach(m => m.classList.remove("act"));
+    btn.classList.add("act");
+    $(btn.dataset.m).classList.add("act");
+    window.dispatchEvent(new Event("resize"));
+  };
+});
+window.addEventListener("resize", () => { draw1(); draw2(); draw3(); draw4(); draw5(); });
+
+// ============ 模块1：单相全控桥 ============
+function draw1(){
+  const a = +$("a1").value, U2 = +$("u2v").value, RL = $("ld1").value === "RL";
+  $("a1a").textContent = a; $("u21").textContent = U2;
+  const Um = Math.SQRT2 * U2;
+  const N = 1200, xs = [], ud = [], u2w = [];
+  for (let k = 0; k <= N; k++){
+    const th = k / N * 4 * Math.PI; // 两个周期
+    xs.push(th);
+    u2w.push(Um * Math.sin(th));
+    const ph = th % (2 * Math.PI);
+    let v = 0;
+    if (RL){
+      // 连续电流：从 α 导通 π，之后对管接管
+      v = (ph >= a * DEG && ph < a * DEG + Math.PI) ? Um * Math.sin(ph) : -Um * Math.sin(ph);
+    } else {
+      // 电阻负载：半波缺角
+      if ((ph >= a * DEG && ph <= Math.PI) || (ph >= Math.PI + a * DEG)) v = Math.abs(Um * Math.sin(ph));
+    }
+    ud.push(v);
+  }
+  const Ud = RL ? 0.9 * U2 * Math.cos(a * DEG) : 0.45 * U2 * (1 + Math.cos(a * DEG));
+  $("r1ud").textContent = Ud.toFixed(1);
+  $("r1um").textContent = Um.toFixed(0);
+  $("r1f").textContent = RL ? "Ud = 0.9·U₂·cosα" : "Ud = 0.45·U₂·(1+cosα)";
+  const { ctx, W, H } = ctxOf($("cv1"));
+  const pad = { l: 44, t: 14, r: 14, b: 26 };
+  axes(ctx, W, H, pad, "ωt (rad, 两周期)");
+  const yMax = Math.ceil(Um / 50) * 50 * 1.15, yMin = RL ? -yMax : -yMax * 0.1;
+  const { X } = plot(ctx, pad, W, H, 0, 4 * Math.PI, yMin, yMax, xs, u2w, "#94a3b8", 1.2);
+  // 导通区底色（按负载类型：R 负载半波缺角；RL 连续导通 π 宽）
+  ctx.fillStyle = "rgba(253,230,138,.45)";
+  for (let cyc = 0; cyc < 2; cyc++){
+    const b0 = cyc * 2 * Math.PI;
+    if (RL){
+      const s = a * DEG + b0;
+      ctx.fillRect(X(s), pad.t, X(s + Math.PI) - X(s), H - pad.t - pad.b);
+    } else {
+      ctx.fillRect(X(a * DEG + b0), pad.t, X(Math.PI + b0) - X(a * DEG + b0), H - pad.t - pad.b);
+      ctx.fillRect(X(Math.PI + a * DEG + b0), pad.t, X(2 * Math.PI + b0) - X(Math.PI + a * DEG + b0), H - pad.t - pad.b);
+    }
+  }
+  plot(ctx, pad, W, H, 0, 4 * Math.PI, yMin, yMax, xs, ud, "#2563eb", 2.2, "rgba(37,99,235,.12)");
+  // 刻度
+  ctx.fillStyle = "#94a3b8"; ctx.font = "10px Consolas";
+  for (let t = 0; t <= 4; t++){
+    ctx.fillText(t + "π", X(t * Math.PI) - 6, H - pad.b + 13);
+    ctx.strokeStyle = "#f1f5f9"; ctx.beginPath();
+    ctx.moveTo(X(t * Math.PI), pad.t); ctx.lineTo(X(t * Math.PI), H - pad.b); ctx.stroke();
+  }
+}
+["a1", "u2v", "ld1"].forEach(id => $(id).addEventListener("input", draw1));
+
+// ============ 模块2：三相全控桥 ============
+function draw2(){
+  const a = +$("a2").value, U2 = +$("u2v2").value;
+  $("a2a").textContent = a; $("u22").textContent = U2;
+  const Ulm = Math.sqrt(6) * U2; // 线电压峰值
+  const N = 1600, xs = [], ud = [], env = [];
+  for (let k = 0; k <= N; k++){
+    const th = k / N * 4 * Math.PI;
+    xs.push(th);
+    // 自然换相点在 30°+k·60°；导通区间 [30+a+k·60, 30+a+(k+1)·60]
+    const ph = th % (2 * Math.PI);
+    const rel = (ph - (30 + a) * DEG) / (60 * DEG);
+    const kk = Math.floor(rel);
+    let v;
+    if (rel >= 0 && kk < 6){
+      v = Ulm * Math.sin(ph - kk * 60 * DEG + 30 * DEG);
+    } else {
+      // 跨周期缝：k 取 -1（上一周期最后一段）
+      const rel2 = rel + 6; const kk2 = Math.floor(rel2);
+      v = kk2 < 6 ? Ulm * Math.sin(ph - kk2 * 60 * DEG + 30 * DEG) : 0;
+    }
+    ud.push(v);
+    // α=0 时的六脉波包络：线电压峰值处=1，换相点(30°+k·60°)处=cos30°=0.866
+    const ph0 = th % (Math.PI / 3);
+    env.push(Ulm * (ph0 <= 30 * DEG ? Math.cos(ph0) : Math.cos(60 * DEG - ph0)));
+  }
+  const Ud = 2.34 * U2 * Math.cos(a * DEG);
+  $("r2ud").textContent = Ud.toFixed(1);
+  $("r2um").textContent = Ulm.toFixed(0);
+  const inv = a > 60;
+  $("r2s").textContent = inv ? (a > 89 ? "接近逆变极限" : "波形含负半周（逆变区边缘）") : "整流状态";
+  $("r2inv").className = "read" + (inv ? " warn" : " ok");
+  const { ctx, W, H } = ctxOf($("cv2"));
+  const pad = { l: 44, t: 14, r: 14, b: 26 };
+  axes(ctx, W, H, pad, "ωt (rad, 两周期)");
+  const yMax = Ulm * 1.15, yMin = -yMax;
+  const { X } = plot(ctx, pad, W, H, 0, 4 * Math.PI, yMin, yMax, xs, env, "#cbd5e1", 1);
+  plot(ctx, pad, W, H, 0, 4 * Math.PI, yMin, yMax, xs, ud, "#7c3aed", 2.2, "rgba(124,58,237,.12)");
+  ctx.fillStyle = "#94a3b8"; ctx.font = "10px Consolas";
+  for (let t = 0; t <= 4; t++){
+    ctx.fillText(t + "π", X(t * Math.PI) - 6, H - pad.b + 13);
+  }
+}
+["a2", "u2v2"].forEach(id => $(id).addEventListener("input", draw2));
+
+// ============ 模块3：DC-DC ============
+function draw3(){
+  const topo = $("topo").value;
+  const D = +$("D").value, Ui = +$("Ui").value, L = +$("L").value * 1e-6;
+  const f = +$("f").value * 1e3, R = +$("R").value, C = +$("C").value * 1e-6;
+  $("dD").textContent = D.toFixed(2); $("uI").textContent = Ui;
+  $("Lv").textContent = (L * 1e6).toFixed(0); $("fv").textContent = (f / 1e3).toFixed(0);
+  $("Rv").textContent = R; $("Cv").textContent = (C * 1e6).toFixed(0);
+  const T = 1 / f;
+  let Uo, dIL, ILavg;
+  if (topo === "buck"){
+    Uo = D * Ui;
+    dIL = Ui * D * (1 - D) / (L * f);
+    ILavg = Uo / R;
+  } else {
+    Uo = Ui / (1 - D);
+    dIL = Ui * D / (L * f);
+    ILavg = Uo / R / (1 - D); // 电感平均电流
+  }
+  const ccm = dIL / 2 <= ILavg;
+  $("r3uo").textContent = Uo.toFixed(1);
+  $("r3di").textContent = dIL.toFixed(2);
+  $("r3du").textContent = topo === "buck" ? (dIL / (8 * C * f) * 1000).toFixed(2) : "—";
+  $("r3m").textContent = ccm ? "CCM 连续" : "DCM 断续!";
+  $("r3mode").className = "read" + (ccm ? " ok" : " warn");
+  // 波形：一个周期 T，iL 三角波 + 开关节点电压
+  const N = 400, xs = [], iL = [], vsw = [];
+  const Imin = ILavg - dIL / 2;
+  for (let k = 0; k <= N; k++){
+    const t = k / N * T;
+    xs.push(t * 1e6); // µs
+    let i, v;
+    if (topo === "buck"){
+      i = t < D * T ? Imin + Ui / L * t : Imin + dIL - Uo / L * (t - D * T);
+      v = t < D * T ? Ui : 0;
+    } else {
+      i = t < D * T ? Imin + Ui / L * t : Imin + dIL - (Uo - Ui) / L * (t - D * T);
+      v = t < D * T ? 0 : Uo; // 开关节点：开关导通钳位到 0，关断后被电感抬到 Uo
+    }
+    if (!ccm && i < 0) i = 0;              // DCM：电流到零后保持（二极管阻断）
+    iL.push(i); vsw.push(v);
+  }
+  const { ctx, W, H } = ctxOf($("cv3"));
+  const pad = { l: 48, t: 14, r: 48, b: 26 };
+  axes(ctx, W, H, pad, "t (µs, 一个开关周期)");
+  const iLo = Math.min(Imin, 0) - dIL * 0.2, iHi = ILavg + dIL * 0.9;
+  const { X, Y } = plot(ctx, pad, W, H, xs[0], xs[N], iLo, iHi, xs, iL, "#dc2626", 2.2);
+  // 电压用右轴叠加
+  const vHi = Math.max(Ui, Uo) * 1.2;
+  ctx.beginPath();
+  for (let k = 0; k <= N; k++){
+    const px = X(xs[k]), py = H - pad.b - vsw[k] / vHi * (H - pad.t - pad.b);
+    if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.strokeStyle = "#2563eb"; ctx.lineWidth = 1.6; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = "#64748b"; ctx.font = "10px Consolas";
+  ctx.fillText(iLo.toFixed(1) + "A", 4, H - pad.b);
+  ctx.fillText(iHi.toFixed(1) + "A", 4, pad.t + 8);
+  ctx.fillText("0V", W - 32, H - pad.b - 2);
+  ctx.fillText(vHi.toFixed(0) + "V", W - 40, pad.t + 8);
+  ctx.fillText("DT/2 → " + (D * T * 1e6).toFixed(2) + "µs", X(xs[Math.round(N * D)]) - 30, pad.t + 10);
+}
+["topo", "D", "Ui", "L", "f", "R", "C"].forEach(id => $(id).addEventListener("input", draw3));
+
+// ============ 模块4：SPWM ============
+function draw4(){
+  const m = +$("m").value, Nc = +$("N").value, Ud = +$("ud").value;
+  $("mv").textContent = m.toFixed(2); $("udv").textContent = Ud;
+  const linear = m <= 1;
+  const u1Lin = m * Ud / 2;                // 线性区基波幅值
+  const u1Sq = 4 * Ud / Math.PI;           // 方波（完全过调制）极限
+  $("r4u1").textContent = linear ? u1Lin.toFixed(1) : u1Lin.toFixed(1) + " → " + u1Sq.toFixed(0);
+  $("r4u1r").textContent = linear ? (u1Lin / Math.SQRT2).toFixed(1) : "介于两者之间";
+  $("r4z").textContent = linear ? "线性区 (m ≤ 1)" : "过调制!（上限为方波 4Ud/π）";
+  $("r4mod").className = "read" + (linear ? " ok" : " warn");
+  const NP = 2400; // 每基波周期采样数
+  const xs = [], modw = [], carr = [], pwm = [];
+  for (let k = 0; k <= NP; k++){
+    const th = k / NP * 2 * Math.PI;
+    xs.push(th);
+    modw.push(m * Math.sin(th));
+    // 三角载波：N 个周期
+    const cph = (th / (2 * Math.PI) * Nc) % 1;
+    carr.push(cph < 0.5 ? (-1 + 4 * cph) : (3 - 4 * cph));
+    pwm.push(modw[k] >= carr[k] ? 1 : -1); // 双极性输出 ±Ud
+  }
+  const { ctx, W, H } = ctxOf($("cv4"));
+  const pad = { l: 40, t: 12, r: 14, b: 40 };
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeRect(pad.l, pad.t, W - pad.l - pad.r, H - pad.t - pad.b);
+  const hHalf = (H - pad.t - pad.b) / 2;
+  const X = x => pad.l + x / (2 * Math.PI) * (W - pad.l - pad.r);
+  // 上半：调制波+载波 (±1.3)
+  const yTop = v => pad.t + hHalf - v / 1.35 * hHalf * 0.9;
+  ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1; ctx.beginPath();
+  for (let k = 0; k <= NP; k++) k ? ctx.lineTo(X(xs[k]), yTop(carr[k])) : ctx.moveTo(X(xs[k]), yTop(carr[k]));
+  ctx.stroke();
+  ctx.strokeStyle = "#dc2626"; ctx.lineWidth = 2; ctx.beginPath();
+  for (let k = 0; k <= NP; k++) k ? ctx.lineTo(X(xs[k]), yTop(modw[k])) : ctx.moveTo(X(xs[k]), yTop(modw[k]));
+  ctx.stroke();
+  ctx.fillStyle = "#64748b"; ctx.font = "10px Microsoft YaHei";
+  ctx.fillText("调制波 + 载波 (±1)", pad.l + 4, pad.t + 10);
+  // 下半：PWM 输出 ±Ud + 基波
+  const yBot = v => H - pad.b - (v + Ud * 1.1) / (2.2 * Ud) * hHalf;
+  ctx.strokeStyle = "#2563eb"; ctx.lineWidth = 1.4; ctx.beginPath();
+  for (let k = 0; k <= NP; k++){
+    const y = yBot(pwm[k] * Ud);
+    if (k === 0) ctx.moveTo(X(xs[k]), y); else { ctx.lineTo(X(xs[k]), y); }
+  }
+  ctx.stroke();
+  const u1g = Math.min(m, 1) * Ud / 2;     // 过调制时基波介于 m·Ud/2 与 4Ud/π 之间，此处画下限
+  ctx.strokeStyle = "#34d399"; ctx.lineWidth = 2.2;
+  if (!linear) ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  for (let k = 0; k <= NP; k++){
+    const y = yBot(u1g * Math.sin(xs[k]));
+    k ? ctx.lineTo(X(xs[k]), y) : ctx.moveTo(X(xs[k]), y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = "10px Microsoft YaHei";
+  ctx.fillText("输出 PWM（蓝）与基波（绿）±Ud", pad.l + 4, H - pad.b - hHalf + 10);
+  ctx.fillText("一个基波周期 / N=" + Nc, W - pad.r - 110, H - pad.b + 14);
+  // 分隔线
+  ctx.strokeStyle = "#e2e8f0"; ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t + hHalf); ctx.lineTo(W - pad.r, pad.t + hHalf); ctx.stroke();
+}
+["m", "N", "ud"].forEach(id => $(id).addEventListener("input", draw4));
+
+// ============ 模块5：双闭环 ============
+function draw5(){
+  const nRef = +$("nr").value, Kp = +$("kp").value, tn = +$("tn").value;
+  const Idm = +$("idm").value, TL = +$("tl").value;
+  $("nrv").textContent = nRef; $("kpv").textContent = Kp; $("tnv").textContent = tn;
+  $("idmv").textContent = Idm; $("tlv").textContent = TL.toFixed(1);
+  const Ki = Kp / (tn / 1000);
+  const alpha = 1 / 150, beta = 0.2;      // 反馈系数（同课程设计）
+  const CT = 1.268, J = 0.135, Ti = 0.0022, Tfb = 0.005;
+  const dt = 5e-5, Tend = 2.5, Tjump = 1.5;
+  let I = 0, w = 0, integ = 0, nfb = 0;
+  const ts = [], ns = [], is = [];
+  let iMax = 0, nMax = 0;
+  const Un = nRef * alpha;                 // 转速给定（V）
+  for (let t = 0; t <= Tend + 1e-9; t += dt){
+    const n = w * 60 / (2 * Math.PI);
+    const TLnow = t < Tjump ? 0 : TL;      // t=1.5s 突加负载
+    ts.push(t); ns.push(n); is.push(I);
+    if (t < Tjump && I > iMax) iMax = I;   // 启动段（突加负载前）的电流平顶
+    if (n > nMax) nMax = n;
+    const e = Un - nfb * alpha;             // ASR 用 5ms 滤波后的转速反馈
+    let u = Kp * e + integ;
+    const uLim = beta * Idm;
+    const sat = Math.max(-uLim, Math.min(uLim, u));
+    // 钳位抗饱和（与 Simulink PID clamping 一致）：未饱和正常积分；饱和且误差反向时积分退饱和
+    if (u === sat || (u > uLim && e < 0) || (u < -uLim && e > 0)) integ += Ki * e * dt;
+    const Iref = sat / beta;
+    I += (Iref - I) / Ti * dt;             // 电流环一阶
+    const dwdt = (CT * I - TLnow) / J;
+    w += dwdt * dt;
+    if (w < 0) w = 0;
+    nfb += (n - nfb) / Tfb * dt;           // 5ms 转速反馈一阶滤波
+  }
+  let nEnd = 0;
+  for (let k = ns.length - 2000; k < ns.length; k++) nEnd += ns[k]; // 末 0.1s 平均（抗极限环相位抖动）
+  nEnd /= 2000;
+  const sigma = Math.max(0, (nMax - nRef) / nRef * 100);
+  // 负载扰动指标：1.5s 后最低转速与恢复时间（回到 ±2% 带内）
+  let dip = 1e9, tRec = null;
+  for (let k = 0; k < ts.length; k++){
+    if (ts[k] >= Tjump){
+      if (ns[k] < dip) dip = ns[k];
+    }
+  }
+  const band = 0.02 * nRef;
+  for (let k = 0; k < ts.length; k++){
+    if (ts[k] >= Tjump && Math.abs(ns[k] - nRef) <= band){ tRec = ts[k] - Tjump; break; }
+  }
+  dip = Math.min(dip, nEnd);
+  $("r5i").textContent = iMax.toFixed(1);
+  $("r5s").textContent = sigma.toFixed(1);
+  $("r5dip").textContent = (nRef - dip).toFixed(0);
+  $("r5rec").textContent = tRec === null ? "未恢复" : tRec.toFixed(3);
+  $("r5n").textContent = nEnd.toFixed(0);
+  const { ctx, W, H } = ctxOf($("cv5"));
+  const pad = { l: 46, t: 14, r: 46, b: 26 };
+  axes(ctx, W, H, pad, "t (s)");
+  const yN = 1750, yI = Math.max(40, Idm * 1.25);
+  const X = t => pad.l + t / Tend * (W - pad.l - pad.r);
+  const Yn = v => H - pad.b - v / yN * (H - pad.t - pad.b);
+  const Yi = v => H - pad.b - (v + yI * 0.15) / (yI * 1.15) * (H - pad.t - pad.b);
+  // 负载扰动竖线
+  ctx.strokeStyle = "#f59e0b"; ctx.setLineDash([4, 3]); ctx.beginPath();
+  ctx.moveTo(X(Tjump), pad.t); ctx.lineTo(X(Tjump), H - pad.b); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = "#b45309"; ctx.font = "10px Microsoft YaHei";
+  ctx.fillText("突加负载 TL", X(Tjump) - 20, pad.t + 10);
+  // 转速
+  ctx.strokeStyle = "#2563eb"; ctx.lineWidth = 2.2; ctx.beginPath();
+  for (let k = 0; k < ts.length; k += 4){
+    const x = X(ts[k]), y = Yn(ns[k]);
+    k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.stroke();
+  // 电流（右轴）
+  ctx.strokeStyle = "#dc2626"; ctx.lineWidth = 1.2; ctx.beginPath();
+  for (let k = 0; k < ts.length; k += 4){
+    const x = X(ts[k]), y = Yi(is[k]);
+    k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.stroke();
+  ctx.fillStyle = "#64748b"; ctx.font = "10px Consolas";
+  ctx.fillText("0", 4, H - pad.b); ctx.fillText(String(yN), 4, pad.t + 8);
+  ctx.fillText("n→", 20, pad.t + 8);
+  ctx.fillText("0", W - 12, H - pad.b);
+  ctx.fillText(String(Math.round(yI)), W - 34, pad.t + 8);
+  ctx.fillText("Ia→", W - 70, pad.t + 8);
+  for (let s = 0; s <= 2.5; s += 0.25){
+    ctx.fillText(s.toFixed(2), X(s) - 10, H - pad.b + 13);
+  }
+}
+["nr", "kp", "tn", "idm", "tl"].forEach(id => $(id).addEventListener("input", draw5));
+
+// ---------- 初始化 ----------
+draw1(); draw2(); draw3(); draw4(); draw5();
+</script>
+</body>
+</html>
