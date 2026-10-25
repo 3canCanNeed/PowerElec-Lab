@@ -254,8 +254,17 @@ function draw1(){
   const { ctx, W, H } = ctxOf($("cv1"));
   const pad = { l: 44, t: 14, r: 14, b: 26 };
   axes(ctx, W, H, pad, "ωt (rad, 两周期)");
-  const yMax = Math.ceil(Um / 50) * 50 * 1.15, yMin = RL ? -yMax : -yMax * 0.1;
-  const { X } = plot(ctx, pad, W, H, 0, 4 * Math.PI, yMin, yMax, xs, u2w, "#94a3b8", 1.2);
+  // 固定纵轴（按滑块上限 380V 定标）：拖 U₂ 时波形真实长高，不再因自动换挡而"抖动"
+  const yMax = 650, yMin = RL ? -650 : -65;
+  const { X, Y } = plot(ctx, pad, W, H, 0, 4 * Math.PI, yMin, yMax, xs, u2w, "#94a3b8", 1.2);
+  // 纵轴刻度
+  ctx.fillStyle = "#94a3b8"; ctx.font = "10px Consolas";
+  for (const v of (RL ? [-600, -400, -200, 0, 200, 400, 600] : [0, 200, 400, 600])){
+    const y = Y(v);
+    ctx.strokeStyle = "#f1f5f9"; ctx.beginPath();
+    ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillText(String(v), 6, y + 3);
+  }
   // 导通区底色（按负载类型：R 负载半波缺角；RL 连续导通 π 宽）
   ctx.fillStyle = "rgba(253,230,138,.45)";
   for (let cyc = 0; cyc < 2; cyc++){
@@ -314,8 +323,17 @@ function draw2(){
   const { ctx, W, H } = ctxOf($("cv2"));
   const pad = { l: 44, t: 14, r: 14, b: 26 };
   axes(ctx, W, H, pad, "ωt (rad, 两周期)");
-  const yMax = Ulm * 1.15, yMin = -yMax;
-  const { X } = plot(ctx, pad, W, H, 0, 4 * Math.PI, yMin, yMax, xs, env, "#cbd5e1", 1);
+  // 固定纵轴（按滑块上限 220V 相电压→线电压峰值 √6·220≈539 定标）
+  const yMax = 650, yMin = -650;
+  const { X, Y } = plot(ctx, pad, W, H, 0, 4 * Math.PI, yMin, yMax, xs, env, "#cbd5e1", 1);
+  // 纵轴刻度
+  ctx.fillStyle = "#94a3b8"; ctx.font = "10px Consolas";
+  for (const v of [-600, -400, -200, 0, 200, 400, 600]){
+    const y = Y(v);
+    ctx.strokeStyle = "#f1f5f9"; ctx.beginPath();
+    ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillText(String(v), 6, y + 3);
+  }
   plot(ctx, pad, W, H, 0, 4 * Math.PI, yMin, yMax, xs, ud, "#7c3aed", 2.2, "rgba(124,58,237,.12)");
   ctx.fillStyle = "#94a3b8"; ctx.font = "10px Consolas";
   for (let t = 0; t <= 4; t++){
