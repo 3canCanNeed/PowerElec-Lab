@@ -110,12 +110,12 @@ footer{max-width:1080px;margin:0 auto;padding:10px 20px 40px;color:var(--mut);fo
 <div class="reads">
 <div class="read">输出电压 Uo = <b id="r3uo">—</b> V</div>
 <div class="read">电感电流纹波 ΔI_L = <b id="r3di">—</b> A</div>
-<div class="read">Buck 输出电压纹波 ΔUo ≈ <b id="r3du">—</b> mV</div>
+<div class="read">输出电压纹波 ΔUo = <b id="r3du">—</b> mV</div>
 <div class="read" id="r3mode">工作模式：<b id="r3m">CCM 连续</b></div>
 </div>
 <canvas id="cv3" height="300"></canvas>
 <div class="legend"><span><i style="background:#dc2626"></i>电感电流 i_L（三角波）</span><span><i style="background:#2563eb"></i>开关节点电压</span></div>
-<div class="fbox">Buck：Uo = D·Ui，ΔI_L = Ui·D(1−D)/(L·f)；Boost：Uo = Ui/(1−D)，ΔI_L = Ui·D/(L·f)。CCM 判据：ΔI_L/2 小于电感平均电流。伏秒平衡是这一切的出发点。</div>
+<div class="fbox">Buck：Uo = D·Ui，ΔI_L = Ui·D(1−D)/(L·f)，ΔUo ≈ ΔI_L/(8Cf)；Boost：Uo = Ui/(1−D)，ΔI_L = Ui·D/(L·f)，ΔUo = Io·D/(Cf)（开关导通期间负载全靠 C 供电）。CCM 判据：ΔI_L/2 小于电感平均电流；<b>断续(DCM)时实际 Uo 高于 CCM 公式值，本页已按 DCM 公式自动修正</b>（Buck M=2/(1+√(1+8Lf/RD²))，Boost m=½(1+√(1+2RD²/Lf))）。伏秒平衡是这一切的出发点。</div>
 </div>
 </section>
 
@@ -351,37 +351,49 @@ function draw3(){
   $("Lv").textContent = (L * 1e6).toFixed(0); $("fv").textContent = (f / 1e3).toFixed(0);
   $("Rv").textContent = R; $("Cv").textContent = (C * 1e6).toFixed(0);
   const T = 1 / f;
-  let Uo, dIL, ILavg;
+  let Uo, dIL, ILavg, ccm;
   if (topo === "buck"){
-    Uo = D * Ui;
+    const UoCcm = D * Ui;
     dIL = Ui * D * (1 - D) / (L * f);
-    ILavg = Uo / R;
+    ILavg = UoCcm / R;
+    ccm = dIL / 2 <= ILavg;
+    // DCM 修正：M = 2/(1+√(1+8Lf/(RD²)))，实际输出高于 CCM 值
+    Uo = ccm ? UoCcm : Ui * 2 / (1 + Math.sqrt(1 + 8 * L * f / (R * D * D)));
   } else {
-    Uo = Ui / (1 - D);
+    const UoCcm = Ui / (1 - D);
     dIL = Ui * D / (L * f);
-    ILavg = Uo / R / (1 - D); // 电感平均电流
+    ILavg = UoCcm / R / (1 - D); // 电感平均电流（CCM）
+    ccm = dIL / 2 <= ILavg;
+    // DCM 修正：m = ½(1+√(1+2RD²/(Lf)))
+    Uo = ccm ? UoCcm : Ui / 2 * (1 + Math.sqrt(1 + 2 * R * D * D / (L * f)));
   }
-  const ccm = dIL / 2 <= ILavg;
+  // 实际电感电流峰值 = 起始值 + 导通段斜率×导通时间（CCM 起始 Imin，DCM 从 0 开始）
+  const Imin = ccm ? ILavg - dIL / 2 : 0;
+  const Ipk = Imin + (topo === "buck" ? (Ui - Uo) : Ui) * D * T / L;
+  const dIL_show = ccm ? dIL : Ipk;
   $("r3uo").textContent = Uo.toFixed(1);
-  $("r3di").textContent = dIL.toFixed(2);
-  $("r3du").textContent = topo === "buck" ? (dIL / (8 * C * f) * 1000).toFixed(2) : "—";
-  $("r3m").textContent = ccm ? "CCM 连续" : "DCM 断续!";
+  $("r3di").textContent = dIL_show.toFixed(2);
+  // 纹波：Buck ≈ ΔI/(8Cf)；Boost 负载电流在 DT 期间全由 C 供给 → ΔUo = Io·D/(Cf)
+  $("r3du").textContent = (topo === "buck"
+    ? dIL_show / (8 * C * f) * 1000
+    : (Uo / R) * D / (C * f) * 1000).toFixed(2);
+  $("r3m").textContent = ccm ? "CCM 连续" : "DCM 断续(已修正Uo)";
   $("r3mode").className = "read" + (ccm ? " ok" : " warn");
-  // 波形：一个周期 T，iL 三角波 + 开关节点电压
+  // 波形：一个周期 T，iL 三角波（斜率用实际 Uo，DCM 自动落到零并保持）+ 开关节点电压
   const N = 400, xs = [], iL = [], vsw = [];
-  const Imin = ILavg - dIL / 2;
   for (let k = 0; k <= N; k++){
     const t = k / N * T;
     xs.push(t * 1e6); // µs
     let i, v;
     if (topo === "buck"){
-      i = t < D * T ? Imin + Ui / L * t : Imin + dIL - Uo / L * (t - D * T);
+      i = t < D * T ? Imin + (Ui - Uo) / L * t : Ipk - Uo / L * (t - D * T);
       v = t < D * T ? Ui : 0;
+      if (!ccm && i < 0){ i = 0; v = Uo; }   // 断流期：二极管截止，节点经电感钳到 Uo
     } else {
-      i = t < D * T ? Imin + Ui / L * t : Imin + dIL - (Uo - Ui) / L * (t - D * T);
-      v = t < D * T ? 0 : Uo; // 开关节点：开关导通钳位到 0，关断后被电感抬到 Uo
+      i = t < D * T ? Imin + Ui / L * t : Ipk - (Uo - Ui) / L * (t - D * T);
+      v = t < D * T ? 0 : Uo;
+      if (!ccm && i < 0){ i = 0; v = Ui; }   // 断流期：二极管截止，节点被电感钳到 Ui
     }
-    if (!ccm && i < 0) i = 0;              // DCM：电流到零后保持（二极管阻断）
     iL.push(i); vsw.push(v);
   }
   const { ctx, W, H } = ctxOf($("cv3"));
